@@ -166,7 +166,7 @@ DECLARE
   user_lang TEXT;
   cat_names TEXT[];
 BEGIN
-  INSERT INTO profiles (id, default_currency, language)
+  INSERT INTO public.profiles (id, default_currency, language)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'default_currency', 'KRW'),
