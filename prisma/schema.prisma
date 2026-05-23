@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Profile {
+  id              String   @id @db.Uuid
+  defaultCurrency String   @default("KRW") @map("default_currency") @db.VarChar(3)
+  language        String   @default("ko") @map("language") @db.VarChar(5)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  paymentMethods PaymentMethod[]
+  categories     Category[]
+  transactions   Transaction[]
+  budgets        Budget[]
+
+  @@map("profiles")
+}
+
+enum PaymentMethodType {
+  credit_card
+  bank_account
+}
+
+model PaymentMethod {
+  id                 String            @id @default(uuid()) @db.Uuid
+  userId             String            @map("user_id") @db.Uuid
+  type               PaymentMethodType
+  name               String            @db.VarChar(100)
+  billingStartDay    Int?              @map("billing_start_day") @db.SmallInt
+  billingEndDay      Int?              @map("billing_end_day") @db.SmallInt
+  paymentDay         Int?              @map("payment_day") @db.SmallInt
+  paymentMonthOffset Int?              @default(1) @map("payment_month_offset") @db.SmallInt
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz()
+
+  profile      Profile       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@map("payment_methods")
+}
+
+model Category {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  name      String   @db.VarChar(50)
+  isDefault Boolean  @default(false) @map("is_default")
+  isHidden  Boolean  @default(false) @map("is_hidden")
+  sortOrder Int      @default(0) @map("sort_order") @db.SmallInt
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  profile      Profile       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  budgets      Budget[]
+
+  @@map("categories")
+}
+
+model Transaction {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  type            String    @db.VarChar(10)
+  amount          Decimal   @db.Decimal(15, 2)
+  currency        String    @db.VarChar(3)
+  categoryId      String    @map("category_id") @db.Uuid
+  paymentMethodId String?   @map("payment_method_id") @db.Uuid
+  transactionDate DateTime  @map("transaction_date") @db.Date
+  paymentDate     DateTime  @map("payment_date") @db.Date
+  note            String?
+  receiptPath     String?   @map("receipt_path") @db.VarChar(500)
+  isSplit         Boolean   @default(false) @map("is_split")
+  splitCount      Int?      @map("split_count") @db.SmallInt
+  confirmedAt     DateTime? @map("confirmed_at") @db.Timestamptz()
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  profile       Profile                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category      Category               @relation(fields: [categoryId], references: [id])
+  paymentMethod PaymentMethod?         @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  allocations   TransactionAllocation[]
+
+  @@index([userId, transactionDate(sort: Desc)])
+  @@index([userId, paymentDate(sort: Desc)])
+  @@index([userId, categoryId])
+  @@index([paymentMethodId])
+  @@map("transactions")
+}
+
+model TransactionAllocation {
+  id               String   @id @default(uuid()) @db.Uuid
+  transactionId    String   @map("transaction_id") @db.Uuid
+  recognitionMonth DateTime @map("recognition_month") @db.Date
+  amount           Decimal  @db.Decimal(15, 2)
+  sortOrder        Int      @default(1) @map("sort_order") @db.SmallInt
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([recognitionMonth])
+  @@index([transactionId, recognitionMonth])
+  @@map("transaction_allocations")
+}
+
+model Budget {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  categoryId   String   @map("category_id") @db.Uuid
+  monthlyLimit Decimal  @map("monthly_limit") @db.Decimal(15, 2)
+  currency     String   @db.VarChar(3)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  profile  Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, categoryId])
+  @@index([userId])
+  @@map("budgets")
+}
