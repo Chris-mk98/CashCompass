@@ -10,6 +10,7 @@ import {
   BarChart3,
   Menu,
   TrendingUp,
+  Download,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -59,6 +60,20 @@ export function MobileNav() {
               >
                 <TrendingUp className="h-4 w-4" />
                 {t("nav.projection")}
+              </Link>
+              <Link
+                href="/import"
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent"
+              >
+                <Download className="h-4 w-4 rotate-180" />
+                {t("nav.import")}
+              </Link>
+              <Link
+                href="/export"
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent"
+              >
+                <Download className="h-4 w-4" />
+                {t("nav.export")}
               </Link>
               <Link
                 href="/settings/categories"

@@ -16,8 +16,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CashCompass",
-  description: "개인 재무 관리 앱 — 발생주의 + 현금 이중 뷰",
+  title: {
+    default: "CashCompass",
+    template: "%s | CashCompass",
+  },
+  description: "Personal finance management with accrual & cash dual-view",
+  icons: { icon: "/favicon.ico" },
 };
 
 export default async function RootLayout({

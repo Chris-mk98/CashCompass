@@ -9,6 +9,8 @@ import {
   PiggyBank,
   BarChart3,
   TrendingUp,
+  Download,
+  Upload,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -22,6 +24,8 @@ const navItems = [
   { href: "/budget", icon: PiggyBank, labelKey: "nav.budget" },
   { href: "/charts", icon: BarChart3, labelKey: "nav.charts" },
   { href: "/projection", icon: TrendingUp, labelKey: "nav.projection" },
+  { href: "/import", icon: Upload, labelKey: "nav.import" },
+  { href: "/export", icon: Download, labelKey: "nav.export" },
 ] as const;
 
 const settingsItems = [
