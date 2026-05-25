@@ -29,11 +29,14 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const pathname = request.nextUrl.pathname;
   const isAuthPage =
-    request.nextUrl.pathname.startsWith("/login") ||
-    request.nextUrl.pathname.startsWith("/signup") ||
-    request.nextUrl.pathname.startsWith("/reset-password") ||
-    request.nextUrl.pathname.startsWith("/auth/callback");
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/signup") ||
+    pathname.startsWith("/reset-password") ||
+    pathname.startsWith("/auth/callback");
+
+  const isResetConfirmPage = pathname.startsWith("/reset-password/confirm");
 
   if (!user && !isAuthPage) {
     const url = request.nextUrl.clone();
@@ -45,7 +48,7 @@ export async function updateSession(request: NextRequest) {
     return redirectResponse;
   }
 
-  if (user && isAuthPage) {
+  if (user && isAuthPage && !isResetConfirmPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     const redirectResponse = NextResponse.redirect(url);
