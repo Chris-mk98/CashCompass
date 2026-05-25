@@ -32,6 +32,7 @@ export async function signup(formData: FormData): Promise<AuthResult> {
     email: parsed.data.email,
     password: parsed.data.password,
     options: {
+      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
       data: {
         default_currency: parsed.data.defaultCurrency,
         language: parsed.data.language,

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { useTranslations } from "next-intl";
+import { getTranslations } from "next-intl/server";
 
 export const metadata: Metadata = { title: "Dashboard" };
 import Link from "next/link";
@@ -24,7 +24,7 @@ export default async function DashboardPage({
   const month = params.month ? Number(params.month) : now.getMonth() + 1;
 
   const data = await getDashboardSummary(year, month);
-  const t = useTranslations();
+  const t = await getTranslations();
 
   return (
     <div className="space-y-4">

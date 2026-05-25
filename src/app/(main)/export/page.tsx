@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { useTranslations } from "next-intl";
+import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 import { getCategories } from "@/queries/categories";
 
@@ -16,7 +16,7 @@ export default async function ExportPage() {
 
   if (!profile) redirect("/login");
 
-  const t = useTranslations();
+  const t = await getTranslations();
 
   return (
     <div className="space-y-4">

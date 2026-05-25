@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { useTranslations } from "next-intl";
+import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -36,7 +36,7 @@ export default async function ChartsPage({
 
   if (!profile) redirect("/login");
 
-  const t = useTranslations();
+  const t = await getTranslations();
 
   return (
     <div className="space-y-4">
