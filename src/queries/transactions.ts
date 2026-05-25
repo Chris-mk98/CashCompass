@@ -32,8 +32,8 @@ export async function getTransactions(params: {
     search,
     view = "accrual",
   } = params;
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 1);
+  const startDate = new Date(Date.UTC(year, month - 1, 1));
+  const endDate = new Date(Date.UTC(year, month, 1));
 
   const where: Prisma.TransactionWhereInput = {
     userId: user.id,
@@ -42,7 +42,11 @@ export async function getTransactions(params: {
   if (view === "cash") {
     where.paymentDate = { gte: startDate, lt: endDate };
   } else {
-    where.transactionDate = { gte: startDate, lt: endDate };
+    where.allocations = {
+      some: {
+        recognitionMonth: { gte: startDate, lt: endDate },
+      },
+    };
   }
 
   if (categoryId) {

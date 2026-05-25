@@ -73,8 +73,8 @@ export async function getDashboardSummary(
   month: number
 ): Promise<DashboardData> {
   const userId = await getUserId();
-  const monthStart = new Date(year, month - 1, 1);
-  const monthEnd = new Date(year, month, 1);
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  const monthEnd = new Date(Date.UTC(year, month, 1));
 
   const [accrualData, cashData, categoryData, budgets, pending] =
     await Promise.all([
