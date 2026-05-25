@@ -23,15 +23,10 @@ model Profile {
   @@map("profiles")
 }
 
-enum PaymentMethodType {
-  credit_card
-  bank_account
-}
-
 model PaymentMethod {
   id                 String            @id @default(uuid()) @db.Uuid
   userId             String            @map("user_id") @db.Uuid
-  type               PaymentMethodType
+  type               String            @db.VarChar(20)
   name               String            @db.VarChar(100)
   billingStartDay    Int?              @map("billing_start_day") @db.SmallInt
   billingEndDay      Int?              @map("billing_end_day") @db.SmallInt

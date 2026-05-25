@@ -86,6 +86,9 @@ export default async function TransactionsPage({
       <TransactionList
         transactions={transactions}
         currency={profile.defaultCurrency}
+        view={view}
+        year={year}
+        month={month}
       />
     </div>
   );

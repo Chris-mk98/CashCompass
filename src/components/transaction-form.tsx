@@ -214,6 +214,9 @@ export function TransactionForm({
             />
           </div>
 
+          {/* TODO: 신용카드 할부 지원 - 할부 적용 시 기존 월 분배(is_split)와 별도로,
+               결제일 기준 매월 현금이 나가는 흐름을 payment_method의 billing 주기에 맞춰
+               transaction_allocations에 추가 추적 (cash view에서 카드 결제일별 지출 반영) */}
           {paymentMethods.length > 0 && (
             <div className="space-y-2">
               <Label>{t("transaction.paymentMethod")}</Label>

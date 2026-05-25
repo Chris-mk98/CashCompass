@@ -20,16 +20,35 @@ type TransactionWithRelations = Prisma.TransactionGetPayload<{
 interface TransactionListProps {
   transactions: TransactionWithRelations[];
   currency: string;
+  view?: "accrual" | "cash";
+  year?: number;
+  month?: number;
 }
 
 export function TransactionList({
   transactions,
   currency,
+  view = "accrual",
+  year,
+  month,
 }: TransactionListProps) {
   const t = useTranslations();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const selected = transactions.find((tx) => tx.id === selectedId) ?? null;
+
+  const getDisplayAmount = (tx: TransactionWithRelations): Prisma.Decimal => {
+    if (view === "accrual" && tx.isSplit && year && month) {
+      const monthStart = new Date(year, month - 1, 1);
+      const monthEnd = new Date(year, month, 1);
+      const alloc = tx.allocations.find((a) => {
+        const rm = new Date(a.recognitionMonth);
+        return rm >= monthStart && rm < monthEnd;
+      });
+      if (alloc) return alloc.amount;
+    }
+    return tx.amount;
+  };
 
   const formatAmount = (amount: Prisma.Decimal, type: string, cur: string) => {
     const value = Number(amount);
@@ -106,7 +125,7 @@ export function TransactionList({
                           : "text-foreground"
                       }`}
                     >
-                      {formatAmount(tx.amount, tx.type, tx.currency)}
+                      {formatAmount(getDisplayAmount(tx), tx.type, tx.currency)}
                     </span>
                   </button>
                 ))}
