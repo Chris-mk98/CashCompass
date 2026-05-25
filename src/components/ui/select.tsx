@@ -6,7 +6,41 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+// Walk the React element tree to collect value→label pairs from SelectItem children.
+// Base UI's SelectValue needs the items prop on Root to display labels instead of raw values.
+function collectItemLabels(children: React.ReactNode): Record<string, string> {
+  const map: Record<string, string> = {}
+  function walk(node: React.ReactNode) {
+    React.Children.forEach(node, (child) => {
+      if (!React.isValidElement(child)) return
+      const p = child.props as Record<string, unknown>
+      if (p.value !== undefined && typeof p.children === "string") {
+        map[String(p.value)] = p.children
+      }
+      if (p.children != null && typeof p.children !== "string") {
+        walk(p.children as React.ReactNode)
+      }
+    })
+  }
+  walk(children)
+  return map
+}
+
+function Select({
+  children,
+  items: itemsProp,
+  ...props
+}: SelectPrimitive.Root.Props<any, any>) {
+  const collected = collectItemLabels(children)
+  const items =
+    itemsProp ??
+    (Object.keys(collected).length > 0 ? collected : undefined)
+  return (
+    <SelectPrimitive.Root items={items} {...props}>
+      {children}
+    </SelectPrimitive.Root>
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
@@ -114,10 +148,7 @@ function SelectItem({
   label,
   ...props
 }: SelectPrimitive.Item.Props) {
-  // Base UI SelectValue reads the registered item label to display the selected value.
-  // The label isn't available from the DOM when the popup is closed, so we derive it
-  // from children when it's a plain string (covers all t() translations and name props).
-  const derivedLabel = label ?? (typeof children === "string" ? children : undefined);
+  const derivedLabel = label ?? (typeof children === "string" ? children : undefined)
   return (
     <SelectPrimitive.Item
       data-slot="select-item"

@@ -39,11 +39,9 @@ export function TransactionList({
 
   const getDisplayAmount = (tx: TransactionWithRelations): Prisma.Decimal => {
     if (view === "accrual" && tx.isSplit && year && month) {
-      const monthStart = new Date(year, month - 1, 1);
-      const monthEnd = new Date(year, month, 1);
       const alloc = tx.allocations.find((a) => {
         const rm = new Date(a.recognitionMonth);
-        return rm >= monthStart && rm < monthEnd;
+        return rm.getUTCFullYear() === year && rm.getUTCMonth() === month - 1;
       });
       if (alloc) return alloc.amount;
     }
