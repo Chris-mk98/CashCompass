@@ -28,6 +28,8 @@ import {
   updatePassword,
   updateLanguage,
 } from "@/actions/profile";
+import { logout } from "@/actions/auth";
+import { LogOut } from "lucide-react";
 import { toast } from "sonner";
 
 interface AccountSettingsProps {
@@ -175,6 +177,20 @@ export function AccountSettings({
             </div>
             <Button type="submit" disabled={submitting}>
               {t("account.updatePassword")}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t("nav.logout")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action={logout}>
+            <Button type="submit" variant="destructive" className="gap-2">
+              <LogOut className="h-4 w-4" />
+              {t("nav.logout")}
             </Button>
           </form>
         </CardContent>
