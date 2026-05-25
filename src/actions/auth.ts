@@ -13,6 +13,13 @@ export type AuthResult = {
   error?: string;
 };
 
+function getBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL)
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  return "http://localhost:3000";
+}
+
 export async function signup(formData: FormData): Promise<AuthResult> {
   const raw = {
     email: formData.get("email"),
@@ -28,11 +35,11 @@ export async function signup(formData: FormData): Promise<AuthResult> {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
     options: {
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+      emailRedirectTo: `${getBaseUrl()}/auth/callback`,
       data: {
         default_currency: parsed.data.defaultCurrency,
         language: parsed.data.language,
@@ -42,6 +49,10 @@ export async function signup(formData: FormData): Promise<AuthResult> {
 
   if (error) {
     return { error: error.message };
+  }
+
+  if (data.user && data.user.identities?.length === 0) {
+    return { error: "이미 가입된 이메일입니다" };
   }
 
   redirect("/dashboard");
@@ -89,7 +100,7 @@ export async function resetPassword(formData: FormData): Promise<AuthResult> {
   const { error } = await supabase.auth.resetPasswordForEmail(
     parsed.data.email,
     {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/reset-password/confirm`,
+      redirectTo: `${getBaseUrl()}/reset-password/confirm`,
     }
   );
 
