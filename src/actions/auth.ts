@@ -51,7 +51,7 @@ export async function signup(formData: FormData): Promise<AuthResult> {
     return { error: error.message };
   }
 
-  if (data.user && data.user.identities?.length === 0) {
+  if (!data.session) {
     return { error: "이미 가입된 이메일입니다" };
   }
 
@@ -76,6 +76,12 @@ export async function login(formData: FormData): Promise<AuthResult> {
   });
 
   if (error) {
+    if (error.message === "Invalid login credentials") {
+      return { error: "이메일 또는 비밀번호가 올바르지 않습니다" };
+    }
+    if (error.message === "Email not confirmed") {
+      return { error: "이메일 인증이 완료되지 않았습니다. 메일을 확인해주세요" };
+    }
     return { error: error.message };
   }
 
