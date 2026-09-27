@@ -3,118 +3,77 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-model Profile {
-  id              String   @id @db.Uuid
-  defaultCurrency String   @default("KRW") @map("default_currency") @db.VarChar(3)
-  language        String   @default("ko") @map("language") @db.VarChar(5)
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz()
-
-  paymentMethods PaymentMethod[]
-  categories     Category[]
-  transactions   Transaction[]
-  budgets        Budget[]
-
-  @@map("profiles")
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
 }
 
-model PaymentMethod {
-  id                 String            @id @default(uuid()) @db.Uuid
-  userId             String            @map("user_id") @db.Uuid
-  type               String            @db.VarChar(20)
-  name               String            @db.VarChar(100)
-  billingStartDay    Int?              @map("billing_start_day") @db.SmallInt
-  billingEndDay      Int?              @map("billing_end_day") @db.SmallInt
-  paymentDay         Int?              @map("payment_day") @db.SmallInt
-  paymentMonthOffset Int?              @default(1) @map("payment_month_offset") @db.SmallInt
-  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz()
-
-  profile      Profile       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
-
-  @@map("payment_methods")
+enum CardKind {
+  PERSONAL
+  CORPORATE
 }
 
-model Category {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  name      String   @db.VarChar(50)
-  isDefault Boolean  @default(false) @map("is_default")
-  isHidden  Boolean  @default(false) @map("is_hidden")
-  sortOrder Int      @default(0) @map("sort_order") @db.SmallInt
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
-
-  profile      Profile       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
-  budgets      Budget[]
-
-  @@map("categories")
+enum EntryKind {
+  CARD_USE         // 카드 사용: 비용(또는 법인카드 미수금) / 카드 미지급금
+  CORP_REIMBURSE   // 법인카드 승인 입금: 은행 / 법인카드 미수금
+  CORP_TO_PERSONAL // 법인카드 미승인 → 개인비용: 비용 / 법인카드 미수금
+  CARD_PAYMENT     // 카드대금 출금: 카드 미지급금 / 은행
+  INCOME           // 수입: 은행 / 수익
+  GENERAL          // 직접 분개
 }
 
-model Transaction {
-  id              String    @id @default(uuid()) @db.Uuid
-  userId          String    @map("user_id") @db.Uuid
-  type            String    @db.VarChar(10)
-  amount          Decimal   @db.Decimal(15, 2)
-  currency        String    @db.VarChar(3)
-  categoryId      String    @map("category_id") @db.Uuid
-  paymentMethodId String?   @map("payment_method_id") @db.Uuid
-  transactionDate DateTime  @map("transaction_date") @db.Date
-  paymentDate     DateTime  @map("payment_date") @db.Date
-  note            String?
-  receiptPath     String?   @map("receipt_path") @db.VarChar(500)
-  isSplit         Boolean   @default(false) @map("is_split")
-  splitCount      Int?      @map("split_count") @db.SmallInt
-  confirmedAt     DateTime? @map("confirmed_at") @db.Timestamptz()
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
-
-  profile       Profile                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category      Category               @relation(fields: [categoryId], references: [id])
-  paymentMethod PaymentMethod?         @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
-  allocations   TransactionAllocation[]
-
-  @@index([userId, transactionDate(sort: Desc)])
-  @@index([userId, paymentDate(sort: Desc)])
-  @@index([userId, categoryId])
-  @@index([paymentMethodId])
-  @@map("transactions")
+model Account {
+  id        Int         @id @default(autoincrement())
+  name      String      @unique
+  type      AccountType
+  // 현금주의 현금흐름에 잡히는 실제 계좌 (신한, 농협, KB 마이너스통장)
+  isCash    Boolean     @default(false)
+  sortOrder Int         @default(0)
+  debits    Entry[]     @relation("debit")
+  credits   Entry[]     @relation("credit")
 }
 
-model TransactionAllocation {
-  id               String   @id @default(uuid()) @db.Uuid
-  transactionId    String   @map("transaction_id") @db.Uuid
-  recognitionMonth DateTime @map("recognition_month") @db.Date
-  amount           Decimal  @db.Decimal(15, 2)
-  sortOrder        Int      @default(1) @map("sort_order") @db.SmallInt
-
-  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-
-  @@index([recognitionMonth])
-  @@index([transactionId, recognitionMonth])
-  @@map("transaction_allocations")
+model Card {
+  id                 Int      @id @default(autoincrement())
+  name               String   @unique
+  kind               CardKind
+  // 이용기간: 매달 cycleStartDay일 ~ 다음 달 (cycleStartDay-1)일
+  cycleStartDay      Int
+  // 출금일: 이용기간 종료월 + paymentMonthOffset 개월의 paymentDay일
+  paymentDay         Int
+  paymentMonthOffset Int
+  payableAccountId   Int      @unique
+  bankAccountId      Int
+  entries            Entry[]
 }
 
-model Budget {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @map("user_id") @db.Uuid
-  categoryId   String   @map("category_id") @db.Uuid
-  monthlyLimit Decimal  @map("monthly_limit") @db.Decimal(15, 2)
-  currency     String   @db.VarChar(3)
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+model Entry {
+  id              Int       @id @default(autoincrement())
+  date            DateTime  @db.Date
+  kind            EntryKind
+  debitAccountId  Int
+  creditAccountId Int
+  amount          Int
+  memo            String?
+  cardId          Int?
+  // CARD_PAYMENT: 어떤 출금 예정일의 청구분을 결제했는지
+  statementDue    DateTime? @db.Date
+  // CORP_REIMBURSE / CORP_TO_PERSONAL: 정산 대상 법인카드 사용 건
+  settlesEntryId  Int?      @unique
+  createdAt       DateTime  @default(now())
 
-  profile  Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  debitAccount  Account @relation("debit", fields: [debitAccountId], references: [id])
+  creditAccount Account @relation("credit", fields: [creditAccountId], references: [id])
+  card          Card?   @relation(fields: [cardId], references: [id])
+  settles       Entry?  @relation("settlement", fields: [settlesEntryId], references: [id])
+  settledBy     Entry?  @relation("settlement")
 
-  @@unique([userId, categoryId])
-  @@index([userId])
-  @@map("budgets")
+  @@index([date])
 }
