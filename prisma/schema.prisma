@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+enum CardKind {
+  PERSONAL
+  CORPORATE
+}
+
+enum EntryKind {
+  CARD_USE         // 카드 사용: 비용(또는 법인카드 미수금) / 카드 미지급금
+  CORP_REIMBURSE   // 법인카드 승인 입금: 은행 / 법인카드 미수금
+  CORP_TO_PERSONAL // 법인카드 미승인 → 개인비용: 비용 / 법인카드 미수금
+  CARD_PAYMENT     // 카드대금 출금: 카드 미지급금 / 은행
+  INCOME           // 수입: 은행 / 수익
+  GENERAL          // 직접 분개
+}
+
+model Account {
+  id        Int         @id @default(autoincrement())
+  name      String      @unique
+  type      AccountType
+  // 현금주의 현금흐름에 잡히는 실제 계좌 (신한, 농협, KB 마이너스통장)
+  isCash    Boolean     @default(false)
+  sortOrder Int         @default(0)
+  debits    Entry[]     @relation("debit")
+  credits   Entry[]     @relation("credit")
+}
+
+model Card {
+  id                 Int      @id @default(autoincrement())
+  name               String   @unique
+  kind               CardKind
+  // 이용기간: 매달 cycleStartDay일 ~ 다음 달 (cycleStartDay-1)일
+  cycleStartDay      Int
+  // 출금일: 이용기간 종료월 + paymentMonthOffset 개월의 paymentDay일
+  paymentDay         Int
+  paymentMonthOffset Int
+  payableAccountId   Int      @unique
+  bankAccountId      Int
+  entries            Entry[]
+}
+
+model Entry {
+  id              Int       @id @default(autoincrement())
+  date            DateTime  @db.Date
+  kind            EntryKind
+  debitAccountId  Int
+  creditAccountId Int
+  amount          Int
+  memo            String?
+  cardId          Int?
+  // CARD_PAYMENT: 어떤 출금 예정일의 청구분을 결제했는지
+  statementDue    DateTime? @db.Date
+  // CORP_REIMBURSE / CORP_TO_PERSONAL: 정산 대상 법인카드 사용 건
+  settlesEntryId  Int?      @unique
+  createdAt       DateTime  @default(now())
+
+  debitAccount  Account @relation("debit", fields: [debitAccountId], references: [id])
+  creditAccount Account @relation("credit", fields: [creditAccountId], references: [id])
+  card          Card?   @relation(fields: [cardId], references: [id])
+  settles       Entry?  @relation("settlement", fields: [settlesEntryId], references: [id])
+  settledBy     Entry?  @relation("settlement")
+
+  @@index([date])
+}
