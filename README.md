@@ -35,7 +35,7 @@
 
 설정 화면에서 바꿀 수 있습니다.
 
-## 실행
+## 로컬 실행
 
 ```bash
 cp .env.example .env   # DATABASE_URL, APP_PASSWORD 입력
@@ -46,4 +46,30 @@ npm run dev
 npm test               # 이용기간·손익 계산 테스트
 ```
 
-Vercel 배포 시 환경변수 `DATABASE_URL`, `APP_PASSWORD`를 설정하세요.
+## AWS 배포 (App Runner + RDS)
+
+```
+휴대폰 ──HTTPS──▶ App Runner (Next.js 컨테이너)
+                     │ VPC 커넥터
+                     ▼
+               RDS PostgreSQL (private subnet, 외부 접근 불가)
+```
+
+| 구성 | 내용 |
+|---|---|
+| `Dockerfile` | Next.js 이미지. 기동 시 `scripts/start.sh`가 스키마 반영(`prisma db push`)과 기본 데이터(upsert)를 수행 |
+| `infra/cloudformation.yaml` | VPC·private subnet, RDS(db.t4g.micro), Secrets Manager(DB·앱 비밀번호), App Runner 서비스(0.25 vCPU / 1 GB, 인스턴스 1개) |
+| `scripts/deploy.sh` | 이미지 빌드 → ECR 푸시 → CloudFormation 배포 |
+
+사전 준비: AWS CLI 로그인(`aws configure`), Docker.
+
+```bash
+APP_PASSWORD=원하는비밀번호 ./scripts/deploy.sh   # 최초 배포 (RDS 생성에 10~15분)
+./scripts/deploy.sh                               # 이후 코드 변경 배포
+```
+
+마지막에 출력되는 `https://….awsapprunner.com` 주소로 접속합니다. 리전은 기본 `ap-northeast-2`(서울), `AWS_REGION`으로 변경할 수 있습니다.
+
+- DB 비밀번호는 자동 생성되어 Secrets Manager에만 저장되고, App Runner가 실행 시 주입합니다.
+- 스택을 삭제해도 RDS는 스냅샷을 남깁니다.
+- 예상 비용(서울): App Runner 약 $5~8/월(대부분 유휴 상태 기준) + RDS db.t4g.micro·20GB 약 $20/월 + Secrets Manager 약 $1/월.

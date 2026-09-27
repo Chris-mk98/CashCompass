@@ -1,0 +1,175 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CashCompass - App Runner + RDS PostgreSQL (private VPC)
+
+Parameters:
+  ImageUri:
+    Type: String
+    Description: ECR image URI (e.g. 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/cashcompass:latest)
+  AppPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 4
+    Description: 앱 로그인 비밀번호
+
+Resources:
+  # --- Network: RDS 전용 private subnet 2개 (NAT 없음) ---
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags: [{ Key: Name, Value: cashcompass }]
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: App Runner VPC connector
+      VpcId: !Ref Vpc
+
+  DbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS - App Runner only
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref AppSecurityGroup
+
+  # --- Secrets ---
+  DbPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: cashcompass/db-password
+      GenerateSecretString:
+        PasswordLength: 32
+        ExcludePunctuation: true # DATABASE_URL에 그대로 넣기 위해 특수문자 제외
+
+  AppPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: cashcompass/app-password
+      SecretString: !Ref AppPassword
+
+  # --- Database ---
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: cashcompass
+      SubnetIds: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      Engine: postgres
+      DBInstanceClass: db.t4g.micro
+      AllocatedStorage: "20"
+      StorageType: gp3
+      StorageEncrypted: true
+      DBName: cashcompass
+      MasterUsername: cashcompass
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DbPasswordSecret}}}"
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VPCSecurityGroups: [!Ref DbSecurityGroup]
+      PubliclyAccessible: false
+      MultiAZ: false
+      BackupRetentionPeriod: 7
+
+  # --- App Runner ---
+  AccessRole: # App Runner가 ECR에서 이미지를 가져오기 위한 역할
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: build.apprunner.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess
+
+  InstanceRole: # 실행 중인 앱이 시크릿을 읽기 위한 역할
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: tasks.apprunner.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: read-secrets
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: [!Ref DbPasswordSecret, !Ref AppPasswordSecret]
+
+  VpcConnector:
+    Type: AWS::AppRunner::VpcConnector
+    Properties:
+      Subnets: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
+      SecurityGroups: [!Ref AppSecurityGroup]
+
+  Service:
+    Type: AWS::AppRunner::Service
+    Properties:
+      ServiceName: cashcompass
+      SourceConfiguration:
+        AuthenticationConfiguration:
+          AccessRoleArn: !GetAtt AccessRole.Arn
+        AutoDeploymentsEnabled: true # 같은 태그로 이미지를 푸시하면 자동 재배포
+        ImageRepository:
+          ImageIdentifier: !Ref ImageUri
+          ImageRepositoryType: ECR
+          ImageConfiguration:
+            Port: "3000"
+            RuntimeEnvironmentVariables:
+              - { Name: DB_HOST, Value: !GetAtt Database.Endpoint.Address }
+              - { Name: DB_PORT, Value: !GetAtt Database.Endpoint.Port }
+              - { Name: DB_NAME, Value: cashcompass }
+              - { Name: DB_USER, Value: cashcompass }
+            RuntimeEnvironmentSecrets:
+              - { Name: DB_PASSWORD, Value: !Ref DbPasswordSecret }
+              - { Name: APP_PASSWORD, Value: !Ref AppPasswordSecret }
+      InstanceConfiguration:
+        Cpu: 0.25 vCPU
+        Memory: 1 GB
+        InstanceRoleArn: !GetAtt InstanceRole.Arn
+      NetworkConfiguration:
+        EgressConfiguration:
+          EgressType: VPC
+          VpcConnectorArn: !GetAtt VpcConnector.VpcConnectorArn
+      HealthCheckConfiguration:
+        Protocol: TCP
+      AutoScalingConfigurationArn: !GetAtt AutoScaling.AutoScalingConfigurationArn
+
+  AutoScaling: # 개인용이므로 인스턴스 1개로 고정
+    Type: AWS::AppRunner::AutoScalingConfiguration
+    Properties:
+      AutoScalingConfigurationName: cashcompass
+      MinSize: 1
+      MaxSize: 1
+
+Outputs:
+  ServiceUrl:
+    Value: !Sub "https://${Service.ServiceUrl}"
